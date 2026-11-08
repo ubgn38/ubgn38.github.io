@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>슬라이드 퍼즐</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <header class="top">
+      <h1>슬라이드 퍼즐</h1>
+      <select id="size" aria-label="난이도">
+        <option value="3">3 x 3</option>
+        <option value="4" selected>4 x 4</option>
+        <option value="5">5 x 5</option>
+      </select>
+    </header>
+
+    <section class="stats">
+      <div class="stat"><span class="label">이동</span><span id="moves" class="value">0</span></div>
+      <div class="stat"><span class="label">시간</span><span id="time" class="value">00:00</span></div>
+    </section>
+
+    <div id="board" class="board" aria-label="퍼즐 보드"></div>
+    <p id="message" class="message"></p>
+
+    <section class="actions">
+      <button id="newGame">새 게임</button>
+      <button id="showBest">랭킹</button>
+    </section>
+
+    <p class="hint">타일을 클릭하거나 방향키 / 스와이프로 이동</p>
+  </main>
+
+  <dialog id="bestDialog">
+    <h2>랭킹 TOP 3</h2>
+    <div class="tabs" id="rankTabs">
+      <button data-size="3">3 x 3</button>
+      <button data-size="4">4 x 4</button>
+      <button data-size="5">5 x 5</button>
+    </div>
+    <ol id="bestList" class="rank-list"></ol>
+    <div class="dialog-actions">
+      <button id="resetBest">기록 초기화</button>
+      <button id="closeBest">닫기</button>
+    </div>
+  </dialog>
+
+  <dialog id="nameDialog">
+    <form id="nameForm" method="dialog">
+      <h2 id="rankTitle">랭킹 등록</h2>
+      <p id="rankInfo" class="rank-info"></p>
+      <input id="playerName" maxlength="10" placeholder="이름 (최대 10자)" autocomplete="off">
+      <p id="nameError" class="error"></p>
+      <div class="dialog-actions">
+        <button type="button" id="skipName">건너뛰기</button>
+        <button type="submit" id="saveName">등록</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="script.js"></script>
+</body>
+</html>
