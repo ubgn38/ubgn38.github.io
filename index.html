@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>파일 뷰어</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: 왼쪽 파일 목록 + 오른쪽 미리보기 패널, 폰에서는 위아래로 쌓임 */
+:root {
+  --bg: #f3f5f7; --panel: #ffffff; --fg: #1b2430; --muted: #627083;
+  --line: #dde3ea; --accent: #2f6f8f; --accent-soft: #e3eff5; --code-bg: #f6f8fa;
+  --sans: "IBM Plex Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  --mono: "JetBrains Mono", Consolas, "D2Coding", monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12171d; --panel: #1a2129; --fg: #e3e9ef; --muted: #8b98a8;
+  --line: #2a333e; --accent: #6db3d4; --accent-soft: #1f3340; --code-bg: #141a20; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12171d; --panel: #1a2129; --fg: #e3e9ef; --muted: #8b98a8;
+  --line: #2a333e; --accent: #6db3d4; --accent-soft: #1f3340; --code-bg: #141a20; color-scheme: dark }
+
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+html { color-scheme: light }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 32px; }
+.wrap { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px }
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px }
+h1 { font-size: 20px; margin: 0; font-weight: 700; letter-spacing: -0.01em }
+h1 small { font-weight: 400; color: var(--muted); font-size: 13px; margin-left: 8px }
+.btn { font: inherit; font-size: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+  padding: 7px 14px; border-radius: 6px; cursor: pointer }
+.btn:hover { border-color: var(--accent) }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); font-weight: 500 }
+.btn:focus-visible, .item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.actions { display: flex; gap: 8px; flex-wrap: wrap }
+
+.main { display: grid; grid-template-columns: 260px 1fr; gap: 16px; align-items: start }
+@media (max-width: 760px) { .main { grid-template-columns: 1fr } }
+
+.side { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; min-width: 0 }
+.side h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0;
+  padding: 10px 14px; border-bottom: 1px solid var(--line); font-weight: 500 }
+.list { list-style: none; margin: 0; padding: 6px; max-height: 60vh; overflow-y: auto }
+.item { display: grid; grid-template-columns: 38px 1fr; gap: 8px; align-items: center; padding: 7px 8px;
+  border-radius: 6px; cursor: pointer; width: 100%; border: 0; background: none; color: inherit; font: inherit; text-align: left }
+.item:hover { background: var(--accent-soft) }
+.item.on { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent) }
+.ext { font-family: var(--mono); font-size: 10px; font-weight: 600; text-align: center; padding: 2px 0;
+  border-radius: 4px; border: 1px solid var(--line); color: var(--accent) }
+.meta { min-width: 0 }
+.name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px }
+.size { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums }
+
+.drop { margin: 8px; padding: 14px; border: 1.5px dashed var(--line); border-radius: 6px; text-align: center;
+  font-size: 13px; color: var(--muted) }
+body.dragging .drop, body.dragging .view { border-color: var(--accent) }
+
+.view { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-width: 0; min-height: 420px;
+  display: flex; flex-direction: column }
+.vbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border-bottom: 1px solid var(--line) }
+.vtitle { font-weight: 500; min-width: 0; overflow-wrap: anywhere }
+.vinfo { font-size: 12px; color: var(--muted); font-family: var(--mono) }
+.vtools { display: flex; gap: 6px; align-items: center }
+.vtools .btn { padding: 4px 10px; font-size: 13px }
+.body { padding: 18px; overflow: auto; flex: 1; min-width: 0 }
+
+.img-box { display: flex; justify-content: center; align-items: center; min-height: 300px;
+  background-image: linear-gradient(45deg, var(--line) 25%, transparent 25%), linear-gradient(-45deg, var(--line) 25%, transparent 25%),
+  linear-gradient(45deg, transparent 75%, var(--line) 75%), linear-gradient(-45deg, transparent 75%, var(--line) 75%);
+  background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0; border-radius: 6px; overflow: auto }
+.img-box img { max-width: none; transform-origin: center; transition: transform .15s }
+.img-box img.fit { max-width: 100%; max-height: 70vh }
+
+pre.code { margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.55; background: var(--code-bg);
+  border: 1px solid var(--line); border-radius: 6px; padding: 12px 0; overflow-x: auto; counter-reset: ln }
+pre.code span.l { display: block; padding: 0 14px 0 0; white-space: pre }
+pre.code span.l::before { counter-increment: ln; content: counter(ln); display: inline-block; width: 3.2em;
+  padding-right: 1em; text-align: right; color: var(--muted); opacity: .6; user-select: none }
+pre.code.wrap span.l { white-space: pre-wrap; overflow-wrap: anywhere }
+
+.md { max-width: 70ch }
+.md h1, .md h2, .md h3 { line-height: 1.3; text-wrap: balance; margin: 1.2em 0 .5em }
+.md h1 { font-size: 24px } .md h2 { font-size: 19px; padding-bottom: 4px; border-bottom: 1px solid var(--line) } .md h3 { font-size: 16px }
+.md > :first-child { margin-top: 0 }
+.md code { font-family: var(--mono); font-size: .88em; background: var(--code-bg); border: 1px solid var(--line); padding: 1px 5px; border-radius: 4px }
+.md pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 12px; overflow-x: auto }
+.md pre code { border: 0; padding: 0; background: none }
+.md blockquote { margin: 0; padding: 2px 14px; border-left: 3px solid var(--accent); color: var(--muted) }
+.md a { color: var(--accent) }
+.md table, .tbl table { border-collapse: collapse; font-size: 14px }
+.md th, .md td, .tbl th, .tbl td { border: 1px solid var(--line); padding: 6px 10px; text-align: left }
+.md th, .tbl th { background: var(--code-bg); font-weight: 500 }
+.tbl { overflow-x: auto } .tbl td { font-variant-numeric: tabular-nums; white-space: nowrap }
+
+video, audio { max-width: 100%; display: block; margin: 0 auto }
+.empty { color: var(--muted); text-align: center; padding: 60px 16px }
+.note { font-size: 12px; color: var(--muted) }
+@media (prefers-reduced-motion: reduce) { .img-box img { transition: none } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>파일 뷰어<small>브라우저에서만 열림 · 업로드 없음</small></h1>
+    <div class="actions">
+      <input type="file" id="picker" multiple hidden>
+      <button class="btn primary" id="openBtn" type="button">파일 열기</button>
+      <button class="btn" id="clearBtn" type="button">목록 비우기</button>
+    </div>
+  </header>
+
+  <div class="main">
+    <aside class="side">
+      <h2>열린 파일 <span id="count"></span></h2>
+      <ul class="list" id="list"></ul>
+      <div class="drop">여기나 오른쪽 화면에 파일을 끌어다 놓으세요</div>
+    </aside>
+
+    <section class="view">
+      <div class="vbar">
+        <div>
+          <div class="vtitle" id="vtitle">선택된 파일 없음</div>
+          <div class="vinfo" id="vinfo"></div>
+        </div>
+        <div class="vtools" id="vtools"></div>
+      </div>
+      <div class="body" id="vbody"><div class="empty">왼쪽 목록에서 파일을 고르세요.</div></div>
+    </section>
+  </div>
+  <p class="note">지원: 이미지(png, jpg, gif, webp, svg) · 텍스트/코드(txt, js, py, java, json, html, css, log, ini 등) · 마크다운 · CSV/TSV 표 · 오디오/동영상. 예시 파일 3개가 미리 들어 있습니다.</p>
+</div>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const files = [];          // { name, size, type, blob, text?, url?, sample? }
+  let current = -1, zoom = 1, wrap = false;
+
+  const IMG = ['png','jpg','jpeg','gif','webp','bmp','svg','ico'];
+  const VID = ['mp4','webm','ogv','mov'];
+  const AUD = ['mp3','wav','ogg','m4a','flac'];
+  const MD  = ['md','markdown'];
+  const TBL = ['csv','tsv'];
+
+  const ext = n => (n.includes('.') ? n.split('.').pop() : '').toLowerCase();
+  const kindOf = f => {
+    const e = ext(f.name);
+    if (IMG.includes(e) || f.type.startsWith('image/')) return 'image';
+    if (VID.includes(e) || f.type.startsWith('video/')) return 'video';
+    if (AUD.includes(e) || f.type.startsWith('audio/')) return 'audio';
+    if (MD.includes(e)) return 'md';
+    if (TBL.includes(e)) return 'table';
+    if (e === 'json') return 'json';
+    return 'text';
+  };
+  const fmtSize = b => b < 1024 ? b + ' B' : b < 1048576 ? (b/1024).toFixed(1) + ' KB' : (b/1048576).toFixed(1) + ' MB';
+  const esc = s => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function addFile(blob, name, sample) {
+    files.push({ name: name || blob.name, size: blob.size, type: blob.type || '', blob, sample });
+  }
+
+  function renderList() {
+    const ul = $('#list');
+    ul.innerHTML = '';
+    files.forEach((f, i) => {
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'item' + (i === current ? ' on' : '');
+      b.innerHTML = `<span class="ext">${esc(ext(f.name).slice(0,4) || '—')}</span>
+        <span class="meta"><div class="name">${esc(f.name)}</div><div class="size">${fmtSize(f.size)}${f.sample ? ' · 예시' : ''}</div></span>`;
+      b.onclick = () => show(i);
+      li.appendChild(b); ul.appendChild(li);
+    });
+    $('#count').textContent = files.length ? `(${files.length})` : '';
+  }
+
+  async function readText(f) {
+    if (f.text == null) f.text = await f.blob.text();
+    return f.text;
+  }
+
+  function tool(label, fn) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn'; b.textContent = label; b.onclick = fn;
+    $('#vtools').appendChild(b); return b;
+  }
+
+  async function show(i) {
+    current = i; zoom = 1; renderList();
+    const f = files[i], k = kindOf(f), body = $('#vbody');
+    $('#vtitle').textContent = f.name;
+    $('#vinfo').textContent = `${k.toUpperCase()} · ${fmtSize(f.size)}`;
+    $('#vtools').innerHTML = '';
+    body.innerHTML = '';
+
+    if (['image','video','audio'].includes(k)) {
+      if (!f.url) f.url = URL.createObjectURL(f.blob);
+    }
+
+    if (k === 'image') {
+      const box = document.createElement('div'); box.className = 'img-box';
+      const img = new Image(); img.src = f.url; img.alt = f.name; img.className = 'fit';
+      img.onload = () => { $('#vinfo').textContent += ` · ${img.naturalWidth}×${img.naturalHeight}px`; };
+      box.appendChild(img); body.appendChild(box);
+      const apply = () => { img.style.transform = `scale(${zoom})`; };
+      tool('−', () => { zoom = Math.max(.1, zoom - .25); apply(); });
+      tool('+', () => { zoom = Math.min(8, zoom + .25); apply(); });
+      tool('원본 크기', () => { img.classList.toggle('fit'); zoom = 1; apply(); });
+    } else if (k === 'video' || k === 'audio') {
+      const m = document.createElement(k); m.src = f.url; m.controls = true; body.appendChild(m);
+    } else if (k === 'md') {
+      const d = document.createElement('div'); d.className = 'md';
+      d.innerHTML = markdown(await readText(f)); body.appendChild(d);
+      tool('원문 보기', () => codeView(f.text, body));
+    } else if (k === 'table') {
+      const t = await readText(f);
+      body.appendChild(tableView(t, ext(f.name) === 'tsv' ? '\t' : ','));
+      tool('원문 보기', () => codeView(t, body));
+    } else if (k === 'json') {
+      let t = await readText(f);
+      try { t = JSON.stringify(JSON.parse(t), null, 2); } catch { $('#vinfo').textContent += ' · JSON 형식 오류, 원문 표시'; }
+      codeView(t, body);
+    } else {
+      const t = await readText(f);
+      if (/\u0000/.test(t.slice(0, 2000))) {
+        body.innerHTML = '<div class="empty">바이너리 파일이라 미리볼 수 없습니다.</div>';
+      } else codeView(t, body);
+    }
+  }
+
+  function codeView(text, body) {
+    body.innerHTML = '';
+    const pre = document.createElement('pre'); pre.className = 'code' + (wrap ? ' wrap' : '');
+    const lines = text.replace(/\r\n?/g, '\n').split('\n');
+    const shown = lines.slice(0, 20000);
+    pre.innerHTML = shown.map(l => `<span class="l">${esc(l) || ' '}</span>`).join('');
+    body.appendChild(pre);
+    if (lines.length > shown.length) {
+      const p = document.createElement('p'); p.className = 'note';
+      p.textContent = `처음 20,000줄만 표시했습니다 (전체 ${lines.length.toLocaleString()}줄).`;
+      body.appendChild(p);
+    }
+    $('#vinfo').textContent = $('#vinfo').textContent.replace(/ · \d[\d,]* 줄$/, '') + ` · ${lines.length.toLocaleString()} 줄`;
+    if (!document.getElementById('wrapBtn')) {
+      const b = tool(wrap ? '줄바꿈 끄기' : '줄바꿈 켜기', () => {
+        wrap = !wrap; pre.classList.toggle('wrap', wrap); b.textContent = wrap ? '줄바꿈 끄기' : '줄바꿈 켜기';
+      });
+      b.id = 'wrapBtn';
+      tool('복사', async e => {
+        const btn = e.currentTarget;
+        try { await navigator.clipboard.writeText(text); btn.textContent = '복사됨'; }
+        catch { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = '선택됨 · Ctrl+C'; }
+        setTimeout(() => btn.textContent = '복사', 1500);
+      });
+    }
+  }
+
+  function parseDelimited(text, d) {
+    const rows = []; let row = [], cell = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) { if (c === '"') { if (text[i+1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+      else if (c === '"') q = true;
+      else if (c === d) { row.push(cell); cell = ''; }
+      else if (c === '\n' || c === '\r') { if (c === '\r' && text[i+1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += c;
+    }
+    if (cell || row.length) { row.push(cell); rows.push(row); }
+    return rows;
+  }
+
+  function tableView(text, d) {
+    const rows = parseDelimited(text, d).slice(0, 2001);
+    const wrapEl = document.createElement('div'); wrapEl.className = 'tbl';
+    if (!rows.length) { wrapEl.innerHTML = '<div class="empty">빈 파일입니다.</div>'; return wrapEl; }
+    const [head, ...rest] = rows;
+    wrapEl.innerHTML = `<table><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
+      rest.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    $('#vinfo').textContent += ` · ${rest.length}행 × ${head.length}열`;
+    return wrapEl;
+  }
+
+  // 작은 마크다운 변환기 (제목, 목록, 코드블록, 인용, 표, 링크, 굵게/기울임)
+  function markdown(src) {
+    const inline = s => esc(s)
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    const lines = src.replace(/\r\n?/g, '\n').split('\n');
+    let out = '', i = 0;
+    while (i < lines.length) {
+      let l = lines[i];
+      if (/^```/.test(l)) {
+        const buf = []; i++;
+        while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
+        i++; out += `<pre><code>${esc(buf.join('\n'))}</code></pre>`; continue;
+      }
+      let m;
+      if ((m = l.match(/^(#{1,6})\s+(.*)/))) { out += `<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`; i++; continue; }
+      if (/^\s*(---|\*\*\*)\s*$/.test(l)) { out += '<hr>'; i++; continue; }
+      if (/^>\s?/.test(l)) {
+        const buf = []; while (i < lines.length && /^>\s?/.test(lines[i])) buf.push(lines[i++].replace(/^>\s?/, ''));
+        out += `<blockquote>${markdown(buf.join('\n'))}</blockquote>`; continue;
+      }
+      if (/^\s*([-*+]|\d+\.)\s+/.test(l)) {
+        const ordered = /^\s*\d+\./.test(l), buf = [];
+        while (i < lines.length && /^\s*([-*+]|\d+\.)\s+/.test(lines[i])) buf.push(lines[i++].replace(/^\s*([-*+]|\d+\.)\s+/, ''));
+        const tag = ordered ? 'ol' : 'ul';
+        out += `<${tag}>${buf.map(x => `<li>${inline(x)}</li>`).join('')}</${tag}>`; continue;
+      }
+      if (/^\|.*\|\s*$/.test(l) && /^\|[\s:|-]+\|\s*$/.test(lines[i+1] || '')) {
+        const cells = r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+        const head = cells(l); i += 2; const body = [];
+        while (i < lines.length && /^\|.*\|\s*$/.test(lines[i])) body.push(cells(lines[i++]));
+        out += `<table><thead><tr>${head.map(h => `<th>${inline(h)}</th>`).join('')}</tr></thead><tbody>${
+          body.map(r => `<tr>${r.map(c => `<td>${inline(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`; continue;
+      }
+      if (!l.trim()) { i++; continue; }
+      const buf = [];
+      while (i < lines.length && lines[i].trim() && !/^(#{1,6}\s|```|>|\s*([-*+]|\d+\.)\s|\|)/.test(lines[i])) buf.push(lines[i++]);
+      out += `<p>${inline(buf.join(' '))}</p>`;
+    }
+    return out;
+  }
+
+  // 파일 열기 / 드래그 앤 드롭
+  $('#openBtn').onclick = () => $('#picker').click();
+  $('#picker').onchange = e => { ingest(e.target.files); e.target.value = ''; };
+  $('#clearBtn').onclick = () => {
+    files.forEach(f => f.url && URL.revokeObjectURL(f.url));
+    files.length = 0; current = -1; renderList();
+    $('#vtitle').textContent = '선택된 파일 없음'; $('#vinfo').textContent = ''; $('#vtools').innerHTML = '';
+    $('#vbody').innerHTML = '<div class="empty">파일 열기 버튼을 누르거나 파일을 끌어다 놓으세요.</div>';
+  };
+  function ingest(list) {
+    const start = files.length;
+    [...list].forEach(f => addFile(f));
+    renderList(); if (files.length > start) show(start);
+  }
+  let depth = 0;
+  addEventListener('dragenter', e => { e.preventDefault(); depth++; document.body.classList.add('dragging'); });
+  addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; document.body.classList.remove('dragging'); } });
+  addEventListener('dragover', e => e.preventDefault());
+  addEventListener('drop', e => { e.preventDefault(); depth = 0; document.body.classList.remove('dragging'); if (e.dataTransfer.files.length) ingest(e.dataTransfer.files); });
+
+  // 예시 파일
+  const sampleMd = `# 파일 뷰어 사용법
+
+브라우저 안에서만 파일을 읽습니다. **서버로 업로드하지 않습니다.**
+
+## 여는 방법
+- 위의 *파일 열기* 버튼
+- 파일을 화면에 끌어다 놓기
+- 여러 개를 한 번에 열 수 있음
+
+## 지원 형식
+| 종류 | 확장자 |
+|---|---|
+| 이미지 | png, jpg, gif, webp, svg |
+| 코드/텍스트 | py, js, java, json, log |
+| 표 | csv, tsv |
+
+> GitHub Pages에 index.html 하나로 올려도 그대로 동작합니다.
+
+\`\`\`bash
+git add index.html && git commit -m "viewer" && git push
+\`\`\``;
+  const samplePy = `import subprocess
+
+def ping(host: str, count: int = 1) -> bool:
+    """호스트에 ping을 보내고 응답 여부를 돌려준다."""
+    result = subprocess.run(
+        ["ping", "-n", str(count), host],
+        capture_output=True, text=True
+    )
+    return result.returncode == 0
+
+if __name__ == "__main__":
+    for ip in ["192.168.0.1", "8.8.8.8"]:
+        print(ip, "OK" if ping(ip) else "FAIL")
+`;
+  const sampleCsv = `시간,호스트,응답(ms),상태
+14:00:01,192.168.0.1,2,정상
+14:00:02,192.168.0.10,15,정상
+14:00:03,10.0.0.5,,시간초과
+14:00:04,8.8.8.8,34,정상`;
+  addFile(new Blob([sampleMd], { type: 'text/markdown' }), 'README.md', true);
+  addFile(new Blob([samplePy], { type: 'text/plain' }), 'ping_check.py', true);
+  addFile(new Blob([sampleCsv], { type: 'text/csv' }), 'ping_log.csv', true);
+  renderList(); show(0);
+})();
+</script>
+</body>
+</html>
