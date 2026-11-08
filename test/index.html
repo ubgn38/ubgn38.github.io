@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Three.js 기반 3D 데이터센터 관제 학습 프로젝트" />
+    <title>3D Data Center Monitor</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">INFRASTRUCTURE VISUALIZATION</p>
+          <h1>3D DATA CENTER MONITOR</h1>
+        </div>
+        <div class="system-state"><span class="pulse"></span> DEMO ONLINE</div>
+      </header>
+
+      <section class="summary">
+        <article class="metric"><span>RACKS</span><strong id="rack-count">06</strong></article>
+        <article class="metric"><span>SERVERS</span><strong id="server-count">48</strong></article>
+        <article class="metric"><span>NORMAL</span><strong class="green" id="normal-count">--</strong></article>
+        <article class="metric"><span>WARNING</span><strong class="amber" id="warning-count">--</strong></article>
+      </section>
+
+      <main class="workspace">
+        <section class="viewport-panel">
+          <div class="panel-heading">
+            <div><span class="eyebrow">LIVE 3D VIEW</span><h2>Server Room</h2></div>
+            <button id="reset-camera" class="secondary-button">카메라 초기화</button>
+          </div>
+          <div id="scene" aria-label="3D 서버실 화면"></div>
+          <div class="hint">드래그: 회전 · 휠: 확대/축소 · 우클릭 드래그: 이동 · 서버 클릭: 상세 정보</div>
+        </section>
+
+        <aside class="details-panel">
+          <span class="eyebrow">OBJECT INSPECTOR</span>
+          <h2>서버 상세 정보</h2>
+          <div id="server-details" class="empty-state">
+            <div class="empty-icon">▦</div>
+            <p>3D 화면에서 서버 장비를 선택하세요.</p>
+          </div>
+          <div class="legend">
+            <h3>상태 범례</h3>
+            <p><i class="dot normal"></i> 정상</p>
+            <p><i class="dot warning"></i> 경고</p>
+          </div>
+          <p class="demo-note">※ 현재 CPU/RAM 및 상태는 화면 테스트용 임의 데이터입니다.</p>
+        </aside>
+      </main>
+      <footer>Learning Demo · Three.js + Vite · No real server connection</footer>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
