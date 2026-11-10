@@ -40,6 +40,7 @@
     <div class="row"><span>천장 조명</span><input type="checkbox" id="lights" checked></div>
     <div class="row"><span>그림자</span><input type="checkbox" id="shadow" checked></div>
     <button id="viewTop">전체 보기</button>
+    <button id="viewPlan">Top 시점 (위에서)</button>
     <button id="viewEye">사진 시점</button>
     <button id="walk">걸어다니기 (PC)</button>
   </div>
@@ -206,10 +207,10 @@
     // ================================================================
     function buildOffice() {
       const g = new THREE.Group();
-      const W = 14, D = 10, H = 2.7;
+      const W = 14, D = 16, H = 2.7;
       const room = shell(g, W, D, H, M.carpetBeige, 0.9, 2.45);
       const monitors = [], lights = [];
-      ceilingLights(g, H, [-3.5, -1.2, 1.2, 3.5], -6.8, 6.8, lights);
+      ceilingLights(g, H, [-6.4, -3.2, 0, 3.2, 6.4], -6.8, 6.8, lights);
 
       // 칸막이 패널: 아래 회색, 위 초록 패브릭, 흰색 프레임
       function partition(len, x, z, rotY) {
@@ -242,47 +243,97 @@
         g.add(d);
       }
 
-      // 4인 팟: 십자 칸막이 + 한쪽 끝 막음
-      function pod(cx, cz) {
-        [-1, 1].forEach(sx => [-1, 1].forEach(sz => {
-          workstation(cx + sx * 0.72, cz + sz * 0.4, sz < 0 ? Math.PI : 0);
+      // 8인 팟: 4인 팟 2개를 옆으로 붙인 형태 (한 줄 4석 × 마주보기 2줄)
+      function pod8(cx, cz) {
+        [-2.16, -0.72, 0.72, 2.16].forEach(ox => [-1, 1].forEach(sz => {
+          workstation(cx + ox, cz + sz * 0.4, sz < 0 ? Math.PI : 0);
         }));
-        partition(2.9, cx, cz, 0);
-        partition(1.6, cx, cz, Math.PI / 2);
-        partition(1.6, cx + 1.47, cz, Math.PI / 2);
+        partition(5.8, cx, cz, 0);                                   // 가운데 긴 칸막이
+        [-1.44, 0, 1.44, 2.91].forEach(ox => partition(1.6, cx + ox, cz, Math.PI / 2));
       }
-      pod(-0.6, -2.4);
-      pod(3.4, -2.4);
-      pod(-0.6, 2.2);
-      pod(3.4, 2.2);
+      // 8석 × 4줄 = 32석 (기존 16석 + 추가 16석)
+      const podRows = [-6, -2, 2, 6];
+      podRows.forEach(z => pod8(1.8, z));
 
-      // 흰색 키큰 수납장 (공간 구분)
-      for (let i = 0; i < 5; i++) {
-        const x = -5.6 + i * 0.92;
-        box(0.9, 1.9, 0.5, M.white, x, 0.95, -0.3, g);
-        box(0.015, 1.86, 0.505, M.grayPanel, x + 0.455, 0.95, -0.3, g, false);
-        box(0.02, 0.25, 0.02, M.metal, x + 0.38, 1.0, -0.04, g);
+      // 8석 테이블 줄 사이 수납장 (3곳): 키큰 수납장 규격 (0.9 × 1.9 × 0.5)
+      function storageRun(cx, cz, n) {
+        const uw = 0.92, h = 1.9, dp = 0.5;
+        for (let i = 0; i < n; i++) {
+          const x = cx + (i - (n - 1) / 2) * uw;
+          box(0.9, h, dp, M.white, x, h / 2, cz, g);
+          box(0.015, h - 0.04, dp + 0.005, M.grayPanel, x + 0.455, h / 2, cz, g, false);   // 칸 구분선
+          [-1, 1].forEach(sd => box(0.02, 0.25, 0.02, M.metal, x + 0.38, 1.0, cz + sd * (dp / 2 + 0.01), g));  // 양면 손잡이
+        }
       }
-      box(0.5, 1.9, 2.0, M.white, -1.15 - 1.4, 0.95, -1.55, g);
+      for (let i = 0; i < podRows.length - 1; i++) storageRun(1.8, (podRows[i] + podRows[i + 1]) / 2, 6);
 
-      // 원형 회의 테이블 + 초록 의자
-      const tx = -4.6, tz = 2.6;
-      cyl(0.6, 0.6, 0.03, M.white, tx, 0.72, tz, g, 40);
-      cyl(0.04, 0.04, 0.7, M.metal, tx, 0.36, tz, g, 10);
-      cyl(0.3, 0.3, 0.02, M.metal, tx, 0.01, tz, g);
-      for (let i = 0; i < 4; i++) {
-        const a = (i / 4) * Math.PI * 2 + 0.4;
-        const c = chair(M.greenSeat, M.mesh);
-        c.position.set(tx + Math.cos(a) * 0.9, 0, tz + Math.sin(a) * 0.9);
-        c.rotation.y = Math.PI / 2 - a;
-        g.add(c);
+      // 원형 회의 테이블 + 초록 의자 4개 (2세트: 기존 위치 + 그 아래)
+      function meetingTable(tx, tz) {
+        cyl(0.6, 0.6, 0.03, M.white, tx, 0.72, tz, g, 40);
+        cyl(0.04, 0.04, 0.7, M.metal, tx, 0.36, tz, g, 10);
+        cyl(0.3, 0.3, 0.02, M.metal, tx, 0.01, tz, g);
+        for (let i = 0; i < 4; i++) {
+          const a = (i / 4) * Math.PI * 2 + 0.4;
+          const c = chair(M.greenSeat, M.mesh);
+          c.position.set(tx + Math.cos(a) * 0.9, 0, tz + Math.sin(a) * 0.9);
+          c.rotation.y = Math.PI / 2 - a;
+          g.add(c);
+        }
       }
+      meetingTable(-4.6, 2.6);
+      meetingTable(-4.6, 5.6);
+
+      // 원형 테이블 옆 왼쪽 벽에 붙인 작은 수납장 2개 (폭 0.8 × 높이 1.0 × 깊이 0.45, 문은 +x 방향)
+      function smallCabinet(z) {
+        const w = 0.8, h = 1.0, dp = 0.45, x = -room.hx + 0.075 + dp / 2 + 0.02;
+        box(dp, h, w, M.white, x, h / 2, z, g);
+        box(dp + 0.005, h - 0.04, 0.015, M.grayPanel, x, h / 2, z, g, false);            // 양문 사이 선
+        [-1, 1].forEach(sd => box(0.02, 0.18, 0.02, M.metal, x + dp / 2 + 0.01, h * 0.62, z + sd * 0.06, g));
+        box(dp + 0.02, 0.03, w + 0.02, M.grayPanel, x, h + 0.015, z, g);                  // 상판
+      }
+      // 두 개를 나란히 붙여 두 원형 테이블 사이 가운데에 배치
+      const cabMid = (2.6 + 5.6) / 2;
+      smallCabinet(cabMid - 0.4);
+      smallCabinet(cabMid + 0.4);
+
+      // ---------- 왼쪽 위 구석 방: 내부 벽 2개 + 문 ----------
+      const IW = 0.12;                        // 내부 벽 두께
+      const roomX = -3.1, roomZ = 0.6;        // 세로 벽 x, 가로 벽 z
+      const wallIn = -room.hx + 0.075;        // 왼쪽 벽 안쪽 면
+      function innerWall(x1, z1, x2, z2, y0 = 0, y1 = H) {
+        const lx = Math.abs(x2 - x1) || IW, lz = Math.abs(z2 - z1) || IW;
+        const cx = (x1 + x2) / 2, cz = (z1 + z2) / 2, h = y1 - y0;
+        box(lx, h, lz, M.wall, cx, y0 + h / 2, cz, g);
+        if (y0 === 0) box(lx + (lx > IW ? 0 : 0.02), 0.08, lz + (lz > IW ? 0 : 0.02), M.base, cx, 0.04, cz, g, false);
+      }
+      // 세로 벽 (뒤쪽 벽 ~ 가로 벽)
+      innerWall(roomX, -room.hz + 0.075, roomX, roomZ + IW / 2);
+
+      // 가로 벽 (왼쪽 벽 ~ 세로 벽), 문 구멍 포함
+      const doorL = -5.95, doorR = -4.95, doorH = 2.1;
+      innerWall(wallIn, roomZ, doorL, roomZ);
+      innerWall(doorR, roomZ, roomX - IW / 2, roomZ);
+      innerWall(doorL, roomZ, doorR, roomZ, doorH, H);            // 문 위 상인방
+
+      // 문틀
+      box(0.05, doorH, IW + 0.04, M.white, doorL + 0.025, doorH / 2, roomZ, g, false);
+      box(0.05, doorH, IW + 0.04, M.white, doorR - 0.025, doorH / 2, roomZ, g, false);
+      box(doorR - doorL, 0.05, IW + 0.04, M.white, (doorL + doorR) / 2, doorH - 0.025, roomZ, g, false);
+
+      // 문짝: 오른쪽 경첩, 방 안쪽(-z)으로 75° 열림
+      const door = new THREE.Group();
+      const leafW = doorR - doorL - 0.1;
+      box(leafW, doorH - 0.06, 0.04, M.white, -leafW / 2, (doorH - 0.06) / 2, 0, door);
+      [-1, 1].forEach(sd => box(0.14, 0.025, 0.025, M.metal, -leafW + 0.1, 1.0, sd * 0.035, door));   // 손잡이
+      door.position.set(doorR - 0.05, 0, roomZ - IW / 2);
+      door.rotation.y = -THREE.MathUtils.degToRad(75);
+      g.add(door);
 
       return {
         group: g, ...room, monitors, lights,
-        top: [[0, 13, 12], [0, 0, 0]],
-        eye: [[-6.3, 1.7, 4.6], [1.5, 0.9, -2]],
-        walkStart: [-6, 4],
+        top: [[0, 17, 17], [0, 0, 0]],
+        eye: [[-6.3, 1.7, 7.4], [1.8, 0.9, -3]],
+        walkStart: [-6, 7],
       };
     }
 
@@ -294,6 +345,8 @@
       const W = 10, D = 11, H = 2.8;
       const room = shell(g, W, D, H, M.carpetGray, 1.0, 2.55);
       const monitors = [], lights = [];
+      // 가운데 통로 중심 x (왼쪽 블록 끝 -0.2 ~ 오른쪽 블록 시작 0.9)
+      const AISLE_X = 0.35;
       ceilingLights(g, H, [-4, -2, 0, 2, 4], -4.8, 4.8, lights);
 
       // 천장 몰딩 띠 (사진의 긴 천장 라인)
@@ -315,9 +368,9 @@
         new THREE.PlaneGeometry(3.0, 1.7),
         new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.35 })
       );
-      screen.position.set(-1.4, 1.65, -room.hz + 0.09);
+      screen.position.set(AISLE_X, 1.65, -room.hz + 0.09);
       g.add(screen);
-      box(3.1, 1.8, 0.03, M.white, -1.4, 1.65, -room.hz + 0.07, g, false);
+      box(3.1, 1.8, 0.03, M.white, AISLE_X, 1.65, -room.hz + 0.07, g, false);
 
       // 천장 빔 프로젝터 (흰 프레임 + 검정 본체)
       const pj = new THREE.Group();
@@ -326,7 +379,7 @@
       box(0.84, 0.03, 0.64, M.white, 0, 0.22, 0, pj, false);
       box(0.5, 0.18, 0.4, M.black, 0, -0.1, 0, pj);
       cyl(0.06, 0.06, 0.06, M.black, 0, -0.1, -0.22, pj).rotation.x = Math.PI / 2;
-      pj.position.set(-1.4, H - 0.3, 0.2);
+      pj.position.set(AISLE_X, H - 0.3, 0.2);
       g.add(pj);
 
       // 강사 책상
@@ -354,19 +407,20 @@
           g.add(c);
         }
       }
-      for (let r = 0; r < 6; r++) {
-        const z = -2.6 + r * 1.35;
-        seatRow(-4.5, z, 4);
-        seatRow(-0.2, z, 3);
+      // 수강석 32석 = 4줄 × (왼쪽 4석 + 오른쪽 4석)
+      for (let r = 0; r < 4; r++) {
+        const z = -2.6 + r * 1.5;
+        seatRow(-3.4, z, 4);
+        seatRow(0.9, z, 4);
       }
-      // 창가 쪽 세로 책상 줄 (사진 오른쪽)
-      for (let i = 0; i < 3; i++) {
-        const d = new THREE.Group();
-        box(0.65, 0.03, 0.8, M.white, 0, 0.74, 0, d);
-        box(0.65, 0.74, 0.03, M.white, 0, 0.37, -0.4, d);
-        box(0.65, 0.74, 0.03, M.white, 0, 0.37, 0.4, d);
-        d.position.set(4.3, 0, -1.6 + i * 1.6);
-        g.add(d);
+      // 빈 세로 책상 줄 (창 반대편 벽 쪽)
+      // 5개를 빈틈없이 이어 붙임 (탁자 1개 = 0.65 × 0.8, 가운데 z=0 기준)
+      const N_EMPTY = 5, EW = 0.8, ez0 = -(N_EMPTY - 1) / 2 * EW;
+      for (let i = 0; i < N_EMPTY; i++) {
+        box(0.65 - 0.004, 0.03, EW - 0.004, M.white, -4.4, 0.74, ez0 + i * EW, g);   // 상판 (이음선 표시용 미세 간격)
+      }
+      for (let i = 0; i <= N_EMPTY; i++) {                                            // 옆판: 맞닿는 곳은 1장만
+        box(0.65, 0.74, 0.03, M.white, -4.4, 0.37, ez0 - EW / 2 + i * EW, g);
       }
 
       return {
@@ -408,14 +462,43 @@
     const rooms = { office: buildOffice(), class: buildClassroom() };
     let cur = null;
 
+    let planMode = false;
+    // 천장 근처 물체(조명·프로젝터 등): Top 시점에서 바닥을 가리지 않도록 숨김
+    function overheadOf(r) {
+      if (!r.overhead) {
+        r.group.updateMatrixWorld(true);
+        r.overhead = [];
+        const bb = new THREE.Box3();
+        r.group.traverse(o => {
+          if (o.isMesh && o !== r.ceiling && !r.walls.includes(o) && bb.setFromObject(o).min.y > 2.15) r.overhead.push(o);
+        });
+      }
+      return r.overhead;
+    }
+    function setPlan(on) {
+      planMode = on;
+      overheadOf(cur).forEach(o => o.visible = !on);
+    }
+
+    // 바로 위에서 내려다보기: 방 전체가 화면에 들어오는 높이 계산
+    function planView() {
+      const t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+      const h = Math.max(cur.hz * 2, (cur.hx * 2) / camera.aspect) / (2 * t) * 1.12;
+      setPlan(true);
+      camera.position.set(0, h, 0.001);
+      orbit.target.set(0, 0, 0);
+      orbit.update();
+    }
+
     function setView([pos, target]) {
+      if (planMode) setPlan(false);
       camera.position.set(...pos);
       orbit.target.set(...target);
       orbit.update();
     }
 
     function switchRoom(key) {
-      if (cur) scene.remove(cur.group);
+      if (cur) { if (planMode) setPlan(false); scene.remove(cur.group); }
       cur = rooms[key];
       scene.add(cur.group);
       applyTime();
@@ -439,11 +522,13 @@
     $('shadow').onchange = e => sun.castShadow = e.target.checked;
     $('viewTop').onclick = () => setView(cur.top);
     $('viewEye').onclick = () => setView(cur.eye);
+    $('viewPlan').onclick = planView;
 
     // ---------- 걷기 모드 ----------
     const keys = {};
     let walking = false;
     $('walk').onclick = () => {
+      if (planMode) setPlan(false);
       camera.position.set(cur.walkStart[0], 1.6, cur.walkStart[1]);
       camera.lookAt(0, 1.4, 0);
       walker.lock();
