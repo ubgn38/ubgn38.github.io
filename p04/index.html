@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OTP 로그인</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <div class="idle" id="idle" role="timer" aria-label="자동 로그아웃까지 남은 시간" hidden></div>
+  <section id="login" hidden>
+    <h1>인증 코드 입력</h1>
+    <p class="sub">Google Authenticator 앱에 표시된 6자리 코드를 입력하세요.</p>
+    <form id="form" autocomplete="off">
+      <div class="digits" id="digits" role="group" aria-label="6자리 인증 코드"></div>
+      <div class="timer" id="timer" aria-hidden="true"><i id="bar"></i></div>
+      <p class="timer-text" id="timerText"></p>
+      <p class="msg" id="msg" role="alert"></p>
+    </form>
+  </section>
+
+  <section id="nosecret" hidden>
+    <h1>OTP 등록이 필요합니다</h1>
+    <p class="sub">config.js에 비밀키가 없습니다. <a href="setup.html">등록 페이지</a>에서 키를 만들고 config.js를 교체하세요.</p>
+  </section>
+
+  <section id="home" hidden>
+    <!-- 로그인 후 보여줄 내용을 여기에 작성하세요 -->
+    <h1>로그인되었습니다</h1>
+    <p class="sub">이 영역을 원하는 내용으로 바꾸세요.</p>
+    <button class="quiet" id="logout" type="button">로그아웃</button>
+  </section>
+</main>
+
+<script src="config.js"></script>
+<script src="totp.js"></script>
+<script>
+(() => {
+  const SESSION_KEY = "otp_login_until";
+  const { secret = "", idleSeconds = 60 } = window.OTP_CONFIG || {};
+  const $ = id => document.getElementById(id);
+  const digitsEl = $("digits");
+  const boxes = [];
+  let busy = false;
+
+  function store(fn) { try { return fn(sessionStorage); } catch { return null; } }
+  const isLoggedIn = () => Number(store(s => s.getItem(SESSION_KEY)) || 0) > Date.now();
+
+  const extendSession = () => store(s => s.setItem(SESSION_KEY, Date.now() + idleSeconds * 1000));
+
+  // 남은 시간을 [01:00] 형식으로 표시
+  function renderIdle() {
+    const until = Number(store(s => s.getItem(SESSION_KEY)) || 0);
+    const left = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+    const mm = String(Math.floor(left / 60)).padStart(2, "0");
+    const ss = String(left % 60).padStart(2, "0");
+    $("idle").textContent = `[${mm}:${ss}]`;
+    $("idle").classList.toggle("low", left <= 10);
+  }
+
+  function logout(message = "") {
+    store(s => s.removeItem(SESSION_KEY));
+    show("login");
+    setMsg(message);
+  }
+
+  function show(id) {
+    for (const s of ["login", "nosecret", "home"]) $(s).hidden = s !== id;
+    $("idle").hidden = id !== "home";
+    if (id === "home") renderIdle();
+    if (id === "login") { clearBoxes(); boxes[0].focus(); }
+  }
+
+  function clearBoxes() { boxes.forEach(b => b.value = ""); }
+
+  function setMsg(text, kind = "") {
+    $("msg").textContent = text;
+    $("msg").className = "msg " + kind;
+  }
+
+  function fillFrom(start, text) {
+    const nums = text.replace(/\D/g, "").slice(0, 6 - start);
+    [...nums].forEach((n, i) => boxes[start + i].value = n);
+    const next = Math.min(start + nums.length, 5);
+    boxes[next].focus();
+    if (boxes.every(b => b.value)) submit();
+  }
+
+  async function submit() {
+    if (busy) return;
+    const code = boxes.map(b => b.value).join("");
+    if (code.length !== 6) return;
+    busy = true;
+    let ok = false;
+    try {
+      ok = await TOTP.verify(secret, code);
+    } catch (e) {
+      setMsg(window.crypto?.subtle
+        ? "config.js의 비밀키 형식이 올바르지 않습니다."
+        : "이 브라우저 환경에서는 인증할 수 없습니다. HTTPS 주소로 접속하세요.", "bad");
+      busy = false;
+      return;
+    }
+    busy = false;
+    if (ok) {
+      extendSession();
+      setMsg("");
+      show("home");
+    } else {
+      setMsg("코드가 일치하지 않습니다. 앱에 표시된 현재 코드를 입력하세요.", "bad");
+      digitsEl.classList.remove("shake");
+      void digitsEl.offsetWidth;
+      digitsEl.classList.add("bad", "shake");
+      clearBoxes();
+      boxes[0].focus();
+    }
+  }
+
+  for (let i = 0; i < 6; i++) {
+    const b = document.createElement("input");
+    b.type = "text";
+    b.inputMode = "numeric";
+    b.maxLength = 6;
+    b.autocomplete = i === 0 ? "one-time-code" : "off";
+    b.setAttribute("aria-label", `${i + 1}번째 숫자`);
+    b.addEventListener("input", () => {
+      digitsEl.classList.remove("bad");
+      const v = b.value;
+      b.value = "";
+      if (v) fillFrom(i, v);
+      if (v) setMsg("");
+    });
+    b.addEventListener("keydown", e => {
+      if (e.key === "Backspace" && !b.value && i > 0) {
+        boxes[i - 1].value = "";
+        boxes[i - 1].focus();
+        e.preventDefault();
+      } else if (e.key === "ArrowLeft" && i > 0) {
+        boxes[i - 1].focus(); e.preventDefault();
+      } else if (e.key === "ArrowRight" && i < 5) {
+        boxes[i + 1].focus(); e.preventDefault();
+      }
+    });
+    b.addEventListener("paste", e => {
+      e.preventDefault();
+      fillFrom(i, e.clipboardData.getData("text"));
+    });
+    b.addEventListener("focus", () => b.select());
+    boxes.push(b);
+    digitsEl.append(b);
+  }
+
+  $("form").addEventListener("submit", e => { e.preventDefault(); submit(); });
+  $("logout").addEventListener("click", () => logout());
+
+  // 마우스, 키보드, 터치 입력이 있으면 자동 로그아웃 시간을 연장
+  // 이미 시간이 지났다면 연장하지 않음 (절전 복귀, 백그라운드 탭 대비)
+  let lastExtend = 0;
+  function onActivity() {
+    if ($("home").hidden || !isLoggedIn()) return;
+    const now = Date.now();
+    if (now - lastExtend < 250) return;
+    lastExtend = now;
+    extendSession();
+    renderIdle();
+  }
+  for (const type of ["mousemove", "mousedown", "keydown", "wheel", "touchstart", "scroll"]) {
+    window.addEventListener(type, onActivity, { passive: true, capture: true });
+  }
+
+  function tick() {
+    const ms = Date.now() % 30000;
+    const left = TOTP.secondsLeft();
+    $("bar").style.transform = `scaleX(${1 - ms / 30000})`;
+    $("timer").classList.toggle("low", left <= 5);
+    $("timerText").textContent = `현재 코드 남은 시간 ${left}초`;
+    // 입력 없이 시간이 지나면 자동 로그아웃
+    if (!$("home").hidden) {
+      if (isLoggedIn()) renderIdle();
+      else logout(`${idleSeconds}초 동안 입력이 없어 로그아웃되었습니다. 코드를 다시 입력하세요.`);
+    }
+  }
+  setInterval(tick, 250);
+  tick();
+
+  show(!secret ? "nosecret" : isLoggedIn() ? "home" : "login");
+})();
+</script>
+</body>
+</html>
