@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>내 링크 모음</title>
+    <style>
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            background-color: #f4f4f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 300px;
+        }
+        h1 {
+            font-size: 20px;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .link-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .link-list a {
+            display: block;
+            padding: 12px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        .link-list a:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>바로가기 링크</h1>
+        <div class="link-list">
+            <a href="./p01/" target="_blank">3D 사무실</a>
+            <a href="./p02/" target="_blank">4x4 퍼즐</a>
+            <a href="./p03/" target="_blank">테트리스</a>
+            <a href="./p04/" target="_blank">OTP 로그인</a>
+        </div>
+    </div>
+
+</body>
+</html>
