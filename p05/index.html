@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>픽셀 펫 키우기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&family=Silkscreen&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* 레이아웃: 밤하늘 배경 위에 노란 장난감 게임기 한 대. 위에서부터 이름표, 액정, 상태 막대, 버튼. */
+  --night:#1c1a3c;      /* 페이지 배경 */
+  --night-2:#2b2859;
+  --shell:#ffcc3d;      /* 게임기 몸체 */
+  --shell-dark:#d99a12;
+  --lcd:#c3d0a8;        /* 액정 바탕 */
+  --ink:#27301f;        /* 액정 픽셀, 본문 글자 */
+  --key:#e4447c;        /* 버튼 */
+  --key-dark:#a92858;
+  --warn:#c2371f;       /* 위험 상태 */
+  --paper:#fff6d8;
+  --font-display:"Jua","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --font-body:"Gowun Dodum","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --font-lcd:"Silkscreen","Jua",monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:radial-gradient(circle at 50% 0%,var(--night-2),var(--night) 70%);
+  background-color:var(--night);
+  color:var(--ink);
+  font-family:var(--font-body);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;padding:20px 16px;
+}
+h1{font-family:var(--font-display);font-weight:400;color:var(--shell);font-size:26px;margin:0;letter-spacing:.02em}
+.device{
+  width:100%;max-width:400px;
+  background:var(--shell);
+  border-radius:36px 36px 56px 56px;
+  padding:18px 18px 22px;
+  box-shadow:inset 0 -10px 0 var(--shell-dark),inset 0 3px 0 #ffe490,0 18px 40px rgba(0,0,0,.45);
+  display:flex;flex-direction:column;gap:12px;
+}
+.tag{display:flex;gap:8px;align-items:center}
+.tag label{font-family:var(--font-display);font-size:15px}
+#name{
+  flex:1;min-width:0;font:inherit;font-family:var(--font-display);font-size:17px;
+  background:var(--paper);color:var(--ink);border:2px solid var(--ink);border-radius:10px;padding:5px 10px;
+}
+.screen{
+  background:var(--ink);border-radius:16px;padding:10px;
+  display:flex;flex-direction:column;gap:8px;
+}
+.info{
+  display:flex;justify-content:space-between;gap:8px;
+  font-family:var(--font-lcd);font-size:13px;color:var(--lcd);
+  font-variant-numeric:tabular-nums;
+}
+canvas{display:block;width:100%;aspect-ratio:3/2;image-rendering:pixelated;border-radius:6px;background:var(--lcd);cursor:pointer}
+#msg{
+  background:var(--lcd);color:var(--ink);border-radius:6px;
+  padding:7px 10px;min-height:2.9em;font-size:15px;line-height:1.35;
+  display:flex;align-items:center;
+}
+.stats{display:grid;grid-template-columns:auto 1fr auto;gap:5px 10px;align-items:center;font-size:14px}
+.stats .lab{font-family:var(--font-display)}
+.meter{display:grid;grid-template-columns:repeat(10,1fr);gap:2px;height:12px}
+.meter i{background:rgba(39,48,31,.18);border-radius:2px}
+.meter i.on{background:var(--ink)}
+.low .meter i.on{background:var(--warn)}
+.flag{font-family:var(--font-display);color:var(--warn);width:2.6em;font-size:13px}
+.keys{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+button{
+  font-family:var(--font-display);font-size:16px;color:#fff;
+  background:var(--key);border:0;border-radius:14px;padding:11px 4px;
+  box-shadow:0 4px 0 var(--key-dark);cursor:pointer;
+}
+button:active:not(:disabled){transform:translateY(3px);box-shadow:0 1px 0 var(--key-dark)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible,#name:focus-visible{outline:3px solid var(--night);outline-offset:2px}
+button.plain{background:var(--ink);box-shadow:0 4px 0 #000;grid-column:span 2}
+#guess{display:none;grid-template-columns:1fr 1fr;gap:8px}
+#guess p{grid-column:1/-1;margin:0;font-family:var(--font-display);text-align:center}
+.guessing .keys{display:none}
+.guessing #guess{display:grid}
+.hint{color:#b9b6dd;font-size:13px;margin:0;text-align:center;max-width:400px}
+</style>
+</head>
+<body>
+<h1>픽셀 펫 키우기</h1>
+
+<main class="device" id="device">
+  <div class="tag">
+    <label for="name">이름</label>
+    <input id="name" maxlength="8" placeholder="이름을 지어 주세요" autocomplete="off">
+  </div>
+
+  <div class="screen">
+    <div class="info"><span id="stage">알</span><span id="age">0일째</span></div>
+    <canvas id="lcd" width="432" height="288" aria-label="펫 화면"></canvas>
+    <div id="msg" role="status" aria-live="polite"></div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="keys">
+    <button data-act="feed">밥</button>
+    <button data-act="snack">간식</button>
+    <button data-act="play">놀기</button>
+    <button data-act="wash">씻기</button>
+    <button data-act="clean">청소</button>
+    <button data-act="med">약</button>
+    <button data-act="light" id="lightBtn" class="plain">불 끄기</button>
+    <button id="resetBtn" class="plain" style="grid-column:1/-1">새 알로 다시 시작</button>
+  </div>
+
+  <div id="guess">
+    <p>어느 쪽을 볼까요?</p>
+    <button data-side="L">◀ 왼쪽</button>
+    <button data-side="R">오른쪽 ▶</button>
+  </div>
+</main>
+
+<p class="hint">화면 속 펫을 누르면 쓰다듬을 수 있어요. 1분이 하루입니다. 진행 상황은 이 브라우저에 저장됩니다.</p>
+
+<script>
+(function(){
+"use strict";
+/* ---------- 스프라이트: # 항상, e 눈 뜰 때만, h 기분 좋을 때만, s 시무룩할 때만 ---------- */
+var SPR={
+egg:[
+"....####....",
+"...#....#...",
+"..#......#..",
+".#..##....#.",
+".#..##....#.",
+"#.......##.#",
+"#.......##.#",
+"#..........#",
+"#...##.....#",
+"#...##.....#",
+".#........#.",
+".#........#.",
+"..##....##..",
+"....####...."],
+baby:[
+"..######..",
+".#......#.",
+"#........#",
+"#.e....e.#",
+"#.#....#.#",
+"#..hssh..#",
+"#..shhs..#",
+".#......#.",
+"..######.."],
+child:[
+".....##.....",
+"....#..#....",
+".....##.....",
+"...######...",
+"..#......#..",
+".#........#.",
+".#.e....e.#.",
+".#.#....#.#.",
+".#..hssh..#.",
+".#..shhs..#.",
+"..#......#..",
+"...##..##...",
+"...#....#..."],
+adultA:[
+"..##......##..",
+"..##......##..",
+"...#......#...",
+"...########...",
+"..#........#..",
+".#..........#.",
+"#..e......e..#",
+"#..#......#..#",
+"#.#........#.#",
+"#....hssh....#",
+"#....shhs....#",
+".#..........#.",
+"..##########..",
+"...##....##..."],
+adultB:[
+".##........##.",
+"#..#......#..#",
+"#...######...#",
+".#..........#.",
+".#..........#.",
+"#..e......e..#",
+"#..#......#..#",
+"#............#",
+"#....hssh....#",
+"#....shhs....#",
+".#..........#.",
+"..#........#..",
+"...###..###...",
+"...#..##..#..."],
+adultC:[
+".#...#..#...#.",
+".##.##..##.##.",
+".############.",
+"#............#",
+"#.##......##.#",
+"#..e......e..#",
+"#..#......#..#",
+"#............#",
+"#....hssh....#",
+"#....shhs....#",
+"#............#",
+".#..........#.",
+"..##########..",
+"..##......##.."],
+poop:["...#...","..###..",".#...#.",".#####.","#.....#","#######"],
+bowl:["..#.#.#..",".........","#########","#.......#",".#.....#.","..#####.."],
+candy:["#..###..#","##.#.#.##","####.####","##.#.#.##","#..###..#"],
+heart:[".##.##.","#######","#######",".#####.","..###..","...#..."],
+bubble:[".##.","#..#","#..#",".##."],
+cross:["..#..","..#..","#####","..#..","..#.."],
+zed:["#####","...#.","..#..",".#...","#####"],
+zed2:["###",".#.","###"],
+bang:["###","###","###",".#.",".#.","...",".#."],
+arrL:["..#..",".##..","#####",".##..","..#.."],
+arrR:["..#..","..##.","#####","..##.","..#.."],
+star:["...#...","..###..","#######",".#####.","..###..",".##.##.","#.....#"]
+};
+var FORM={adultA:"별몽",adultB:"곰몽",adultC:"뾰족몽"};
+var STATS=[["full","배부름"],["happy","행복"],["clean","청결"],["energy","기운"],["health","건강"]];
+
+/* ---------- 상태 ---------- */
+var KEY="pixel-pet-v1";
+function fresh(){return{name:"",stage:"egg",form:null,age:0,full:70,happy:70,clean:90,energy:90,health:100,
+  poops:[],sick:false,asleep:false,careSum:0,careN:0,poopT:60,last:Date.now()};}
+function load(){try{var s=JSON.parse(localStorage.getItem(KEY));if(s&&s.stage)return s;}catch(e){}return null;}
+function save(){st.last=Date.now();try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}}
+function clamp(v){return Math.max(0,Math.min(100,v));}
+function nm(){return st.name||"펫";}
+
+var st=load()||fresh();
+var mode="idle", frame=0, fx=null, petX=30, dir=1, catchup=false, petCool=0, resetArmed=0;
+var $=function(id){return document.getElementById(id);};
+var msgEl=$("msg");
+function say(t){if(!catchup)msgEl.textContent=t;}
+
+/* ---------- 시간 흐름 (1초에 한 번) ---------- */
+function tick(){
+  if(st.stage==="gone")return;
+  st.age++;
+  if(st.stage==="egg"){
+    if(st.age>=8){st.stage="baby";st.age=0;say("알에서 깨어났어요! 잘 돌봐 주세요.");}
+    return;
+  }
+  var p=st.poops.length;
+  if(st.asleep){
+    st.energy+=1.5;st.full-=0.1;st.happy-=0.03;st.clean-=0.05;
+    if(st.energy>=100){st.asleep=false;say("푹 자고 일어났어요!");}
+  }else{
+    st.full-=0.28;st.happy-=0.2+p*0.05;st.clean-=0.1+p*0.2;st.energy-=0.14;
+    st.poopT--;
+    if(st.poopT<=0&&p<4){st.poops.push(6+Math.floor(Math.random()*56));st.poopT=70+Math.floor(Math.random()*50);say("응가를 했어요. 치워 주세요.");}
+    if(st.energy<=0){st.asleep=true;say("너무 졸려서 그대로 잠들었어요.");}
+  }
+  if(!st.sick&&(st.clean<25||p>=3||st.full<10)&&Math.random()<0.02){st.sick=true;say("몸이 안 좋아 보여요. 약이 필요해요!");}
+  var dh=0;
+  if(st.sick)dh-=0.45;
+  if(st.full<=0)dh-=0.4;
+  if(!st.sick&&st.full>40&&st.clean>40)dh+=0.25;
+  st.health+=dh;
+  STATS.forEach(function(s){st[s[0]]=clamp(st[s[0]]);});
+  if(catchup&&st.health<25)st.health=25;
+  st.careSum+=(st.full+st.happy+st.clean+st.health)/4;st.careN++;
+  if(st.health<=0){st.stage="gone";st.asleep=false;mode="idle";say(nm()+"이(가) 별나라로 떠났어요. 새 알로 다시 시작할 수 있어요.");return;}
+  if(st.stage==="baby"&&st.age>=90){st.stage="child";say("쑥쑥 자라서 어린이가 됐어요!");}
+  else if(st.stage==="child"&&st.age>=300){
+    var avg=st.careSum/st.careN;
+    st.form=avg>=70?"adultA":avg>=45?"adultB":"adultC";
+    st.stage="adult";say("다 자랐어요! "+FORM[st.form]+"(으)로 성장했습니다.");
+  }
+}
+
+/* ---------- 행동 ---------- */
+function setFx(type,extra){fx={type:type,until:frame+8,side:extra};}
+function act(a){
+  if(st.stage==="gone"||st.stage==="egg")return;
+  if(a==="light"){
+    st.asleep=!st.asleep;
+    if(st.asleep)say("불을 껐어요. 쿨쿨 잠들었어요.");
+    else if(st.energy<30){st.happy=clamp(st.happy-8);say("아직 졸린데 깨워서 시무룩해요.");}
+    else say("불을 켰어요. 일어났어요!");
+  }else if(st.asleep){return;
+  }else if(a==="feed"){
+    if(st.full>=95)say("배가 불러서 안 먹어요.");
+    else{st.full=clamp(st.full+30);st.poopT=Math.min(st.poopT,25);setFx("food");say("냠냠! 밥을 맛있게 먹었어요.");}
+  }else if(a==="snack"){
+    st.happy=clamp(st.happy+12);st.full=clamp(st.full+8);st.clean=clamp(st.clean-4);setFx("snack");say("달콤한 간식에 신났어요. 조금 지저분해졌어요.");
+  }else if(a==="play"){
+    if(st.sick)say("아파서 놀 수 없어요. 약을 먼저 주세요.");
+    else if(st.energy<15)say("너무 졸려서 놀 수 없어요. 재워 주세요.");
+    else{mode="guess";say(nm()+"이(가) 어느 쪽을 볼지 맞혀 보세요.");}
+  }else if(a==="wash"){
+    st.clean=100;setFx("wash");say("뽀득뽀득 깨끗해졌어요.");
+  }else if(a==="clean"){
+    if(!st.poops.length)say("치울 게 없어요.");
+    else{st.poops=[];st.clean=clamp(st.clean+10);say("응가를 말끔히 치웠어요.");}
+  }else if(a==="med"){
+    if(st.sick){st.sick=false;st.health=clamp(st.health+25);setFx("med");say("약을 먹고 나았어요!");}
+    else{st.happy=clamp(st.happy-5);setFx("med");say("아프지 않은데 쓴 약을 먹어서 싫어해요.");}
+  }
+  save();ui();
+}
+function guess(side){
+  var real=Math.random()<0.5?"L":"R";
+  mode="idle";setFx("look",real);
+  st.energy=clamp(st.energy-10);st.full=clamp(st.full-5);
+  if(side===real){st.happy=clamp(st.happy+25);say("맞혔어요! "+nm()+"이(가) 아주 즐거워해요.");}
+  else{st.happy=clamp(st.happy+8);say("틀렸어요. 그래도 같이 놀아서 좋아해요.");}
+  save();ui();
+}
+
+/* ---------- 화면 그리기 ---------- */
+var cv=$("lcd"),ctx=cv.getContext("2d"),S=6,W=72,H=48,GROUND=43;
+var LCD="#c3d0a8",INK="#27301f";
+function sprite(rows,x,y,col,o){
+  o=o||{};ctx.fillStyle=col;
+  for(var r=0;r<rows.length;r++)for(var c=0;c<rows[r].length;c++){
+    var ch=rows[r][c];
+    if(ch==="."||(ch==="e"&&o.blink)||(ch==="h"&&o.sad)||(ch==="s"&&!o.sad))continue;
+    var X=x+c,Y=y+r;if(X<0||Y<0||X>=W||Y>=H)continue;
+    ctx.fillRect(X*S,Y*S,S-1,S-1);
+  }
+}
+function draw(){
+  var dark=st.asleep, bg=dark?INK:LCD, fg=dark?LCD:INK;
+  ctx.fillStyle=bg;ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.fillStyle=dark?"rgba(195,208,168,.05)":"rgba(39,48,31,.06)";
+  for(var y=0;y<H;y++)for(var x=0;x<W;x++)ctx.fillRect(x*S,y*S,S-1,S-1);
+  ctx.fillStyle=fg;
+  for(x=0;x<W;x+=2)ctx.fillRect(x*S,(GROUND+1)*S,S-1,S-1);
+
+  if(st.stage==="gone"){
+    var sy=18-(frame%16>8?16-frame%16:frame%16)/2;
+    sprite(SPR.star,32,Math.round(sy),fg);
+    sprite(SPR.star,12,8,fg);sprite(SPR.star,54,12,fg);
+    return;
+  }
+  var key=st.stage==="adult"?st.form:st.stage, rows=SPR[key], w=rows[0].length, h=rows.length;
+  var active=fx&&frame<fx.until;
+  if(!active)fx=null;
+  // 이동
+  if(st.stage==="egg"){petX=Math.round((W-w)/2)+(frame%8===0?1:frame%8===4?-1:0);}
+  else if(!st.asleep&&!fx&&mode==="idle"){
+    if(Math.random()<0.35){petX+=dir;if(Math.random()<0.12)dir=-dir;}
+  }
+  if(fx&&fx.type==="look")petX+=fx.side==="L"?-2:2;
+  if(petX<4){petX=4;dir=1;}if(petX>W-w-4){petX=W-w-4;dir=-1;}
+  var bounce=(st.stage!=="egg"&&!st.asleep&&frame%2)?1:0;
+  var sad=st.sick||st.happy<35||st.full<25;
+  var blink=st.asleep||frame%14===0;
+  var py=GROUND-h+1-bounce;
+  st.poops.forEach(function(px){sprite(SPR.poop,px,GROUND-5,fg);});
+  sprite(rows,petX,py,fg,{blink:blink,sad:sad});
+
+  if(st.asleep){
+    var zy=frame%4;
+    sprite(SPR.zed,petX+w+2,py-4-zy,fg);sprite(SPR.zed2,petX+w+8,py-9-zy,fg);
+  }
+  if(st.sick&&!st.asleep&&frame%2)sprite(SPR.cross,petX-7,py-2,fg);
+  if(fx){
+    var t=fx.until-frame;
+    if(fx.type==="food"&&t>2)sprite(SPR.bowl,petX+w+2<W-10?petX+w+2:petX-11,GROUND-5,fg);
+    if(fx.type==="snack"&&t>2)sprite(SPR.candy,petX+w+2<W-10?petX+w+2:petX-11,GROUND-6,fg);
+    if(fx.type==="med")sprite(SPR.cross,petX+Math.floor(w/2)-2,py-7,fg);
+    if(fx.type==="heart")sprite(SPR.heart,petX+Math.floor(w/2)-3,py-8-(8-t)/2|0,fg);
+    if(fx.type==="look")sprite(fx.side==="L"?SPR.arrL:SPR.arrR,petX+Math.floor(w/2)-2,py-7,fg);
+    if(fx.type==="wash"){
+      sprite(SPR.bubble,petX-4,py+(t%3),fg);sprite(SPR.bubble,petX+w,py+3-(t%3),fg);sprite(SPR.bubble,petX+Math.floor(w/2)-2,py-6+(t%2),fg);
+    }
+  }
+  if(needs()&&frame%2===0)sprite(SPR.bang,W-6,3,fg);
+}
+function needs(){
+  if(st.stage==="egg"||st.stage==="gone"||st.asleep)return false;
+  return st.sick||st.poops.length>0||st.full<25||st.happy<25||st.clean<25||st.energy<20||st.health<40;
+}
+
+/* ---------- 화면 밖 UI ---------- */
+var statEl=$("stats"),rowsEl={};
+STATS.forEach(function(s){
+  var lab=document.createElement("span");lab.className="lab";lab.textContent=s[1];
+  var m=document.createElement("span");m.className="meter";for(var i=0;i<10;i++)m.appendChild(document.createElement("i"));
+  var f=document.createElement("span");f.className="flag";
+  var wrap=document.createElement("div");wrap.style.display="contents";
+  wrap.appendChild(lab);wrap.appendChild(m);wrap.appendChild(f);statEl.appendChild(wrap);
+  rowsEl[s[0]]={wrap:wrap,m:m,f:f};
+});
+function ui(){
+  STATS.forEach(function(s){
+    var v=st[s[0]],n=Math.ceil(v/10),r=rowsEl[s[0]],low=v<25;
+    for(var i=0;i<10;i++)r.m.children[i].className=i<n?"on":"";
+    r.wrap.className=low?"low":"";r.f.textContent=low?"위험":"";
+    r.m.setAttribute("aria-label",s[1]+" "+Math.round(v)+"%");
+  });
+  $("stage").textContent=st.stage==="egg"?"알":st.stage==="baby"?"아기":st.stage==="child"?"어린이":st.stage==="adult"?"어른 · "+FORM[st.form]:"별나라";
+  $("age").textContent=(st.stage==="egg"?0:Math.floor(st.age/60)+1)+"일째"+(st.sick?" · 아픔":"");
+  var off=st.stage==="egg"||st.stage==="gone";
+  document.querySelectorAll("[data-act]").forEach(function(b){
+    b.disabled=off||(st.asleep&&b.dataset.act!=="light");
+  });
+  $("lightBtn").textContent=st.asleep?"불 켜기":"불 끄기";
+  $("device").classList.toggle("guessing",mode==="guess");
+}
+
+/* ---------- 이벤트 ---------- */
+document.querySelectorAll("[data-act]").forEach(function(b){b.addEventListener("click",function(){act(b.dataset.act);});});
+document.querySelectorAll("[data-side]").forEach(function(b){b.addEventListener("click",function(){guess(b.dataset.side);});});
+$("name").value=st.name;
+$("name").addEventListener("input",function(e){st.name=e.target.value.trim();save();});
+$("resetBtn").addEventListener("click",function(){
+  var b=$("resetBtn");
+  if(st.stage!=="gone"&&Date.now()>resetArmed){resetArmed=Date.now()+3000;b.textContent="한 번 더 누르면 처음부터 시작해요";
+    setTimeout(function(){b.textContent="새 알로 다시 시작";},3000);return;}
+  resetArmed=0;b.textContent="새 알로 다시 시작";
+  var keep=st.name;st=fresh();st.name=keep;mode="idle";fx=null;say("새 알이 도착했어요. 곧 깨어날 거예요.");save();ui();
+});
+cv.addEventListener("click",function(){
+  if(st.stage==="egg"){st.age+=2;say("알이 꿈틀거려요!");return;}
+  if(st.stage==="gone"||st.asleep||frame<petCool)return;
+  petCool=frame+12;st.happy=clamp(st.happy+3);setFx("heart");say("쓰다듬어 주니 좋아해요.");ui();
+});
+
+/* ---------- 시작 ---------- */
+(function start(){
+  var away=Math.floor((Date.now()-(st.last||Date.now()))/1000);
+  if(st.stage==="egg"&&st.age===0)msgEl.textContent="알이 도착했어요. 곧 깨어날 거예요.";
+  else if(st.stage==="gone")msgEl.textContent=nm()+"이(가) 별나라로 떠났어요. 새 알로 다시 시작할 수 있어요.";
+  else{
+    if(away>5){catchup=true;for(var i=0;i<Math.min(away,240);i++)tick();catchup=false;}
+    msgEl.textContent=away>30?"다녀오셨어요? "+nm()+"이(가) 기다리고 있었어요.":nm()+"이(가) 반가워해요.";
+  }
+  ui();draw();
+  setInterval(function(){
+    frame++;
+    if(frame%4===0){tick();ui();if(frame%20===0)save();}
+    draw();
+  },250);
+})();
+})();
+</script>
+</body>
+</html>
