@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>단어 떨어뜨리기</title>
+<style>
+:root{--bg:#f3f1ec;--card:#fffdf8;--tx:#1f2a2e;--mu:#64706f;--ac:#0f766e;--ok:#16a34a;--bad:#dc2626;--bd:#d9d4c7;--fl:#fbfaf6;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10181a;--card:#1a2528;--tx:#e8eeee;--mu:#93a3a3;--ac:#2dd4bf;--ok:#4ade80;--bad:#f87171;--bd:#2c3b3e;--fl:#0c1315;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#10181a;--card:#1a2528;--tx:#e8eeee;--mu:#93a3a3;--ac:#2dd4bf;--ok:#4ade80;--bad:#f87171;--bd:#2c3b3e;--fl:#0c1315;color-scheme:dark}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{height:100%;margin:0;background:var(--bg);color:var(--tx);font-family:"Pretendard","Noto Sans KR",system-ui,sans-serif}
+[hidden]{display:none!important}
+#app{height:100%;max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:8px;padding:10px;box-sizing:border-box}
+#hud{display:flex;justify-content:space-between;font-size:15px;font-weight:700}
+#hud span:last-child{color:var(--bad);letter-spacing:2px}
+#field{flex:1;position:relative;overflow:hidden;background:var(--fl);border:1px solid var(--bd);border-radius:12px;border-bottom:4px solid var(--bad)}
+#field.x{animation:sh .25s}
+@keyframes sh{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.w{position:absolute;left:0;top:0;padding:6px 14px;border-radius:999px;background:var(--card);border:1.5px solid var(--bd);font:700 18px/1.2 Georgia,"Times New Roman",serif;will-change:transform}
+.w.t{border-color:var(--ac);color:var(--ac);background:var(--card)}
+#ov{position:absolute;inset:0;display:flex;background:color-mix(in srgb,var(--bg) 88%,transparent);padding:14px;overflow:auto}
+.card{width:100%;max-width:340px;text-align:center;margin:auto}
+.card h2{margin:0 0 8px;font:700 28px Georgia,serif}
+.card p{margin:6px 0;color:var(--mu);font-size:14px;line-height:1.5}
+.card ul{list-style:none;padding:0;margin:8px 0;font-size:14px;text-align:left}
+.card li{padding:4px 0;border-bottom:1px solid var(--bd)}
+.card li b{font-family:Georgia,serif;margin-right:8px}
+.btns{display:grid;gap:8px;margin-top:12px}
+.me{color:var(--ac)}
+input{font:inherit;width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1.5px solid var(--bd);background:var(--card);color:var(--tx);margin-top:6px}
+button{font:inherit;font-weight:600;padding:13px 8px;border-radius:10px;border:1.5px solid var(--bd);background:var(--card);color:var(--tx);cursor:pointer}
+.btns button{background:var(--ac);border-color:var(--ac);color:var(--bg)}
+button:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+.w small{display:block;text-align:center;font:500 11px system-ui,sans-serif;color:var(--mu)}
+#c{display:grid;grid-template-columns:1fr 1fr;gap:8px;min-height:104px}
+#c button{font-size:16px}
+#c button:active{border-color:var(--ac)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud"><span>점수 0</span><span></span></div>
+  <div id="field"><div id="ov"></div></div>
+  <div id="c"></div>
+</div>
+<script>
+const W={
+'영어 초급':[['apple','사과'],['book','책'],['water','물'],['happy','행복한'],['run','달리다'],['friend','친구'],['school','학교'],['family','가족'],['music','음악'],['window','창문'],['morning','아침'],['dream','꿈'],['river','강'],['bright','밝은'],['borrow','빌리다'],['early','이른'],['kind','친절한'],['travel','여행하다'],['market','시장'],['season','계절']],
+'영어 중급':[['achieve','달성하다'],['reduce','줄이다'],['improve','향상시키다'],['require','요구하다'],['environment','환경'],['opportunity','기회'],['experience','경험'],['decision','결정'],['responsible','책임이 있는'],['necessary','필요한'],['community','공동체'],['conclude','결론짓다'],['evidence','증거'],['influence','영향'],['generate','생성하다'],['maintain','유지하다'],['neglect','소홀히 하다'],['ordinary','평범한'],['propose','제안하다'],['rare','드문']],
+'중국어 초급':[['你好','안녕하세요','nǐ hǎo'],['谢谢','고맙습니다','xièxie'],['水','물','shuǐ'],['朋友','친구','péngyou'],['学校','학교','xuéxiào'],['老师','선생님','lǎoshī'],['吃饭','밥을 먹다','chī fàn'],['喜欢','좋아하다','xǐhuan'],['今天','오늘','jīntiān'],['明天','내일','míngtiān'],['苹果','사과','píngguǒ'],['书','책','shū'],['电话','전화','diànhuà'],['好吃','맛있다','hǎochī'],['漂亮','예쁘다','piàoliang'],['工作','일','gōngzuò'],['家','집','jiā'],['钱','돈','qián'],['天气','날씨','tiānqì'],['对不起','미안합니다','duìbuqǐ']],
+'일본어 초급':[['ありがとう','고마워요','arigatō'],['お水','물','omizu'],['友達','친구','tomodachi'],['大学','대학교','daigaku'],['先生','선생님','sensei'],['食べる','먹다','taberu'],['好き','좋아하다','suki'],['今日','오늘','kyō'],['明日','내일','ashita'],['本','책','hon'],['電話','전화','denwa'],['美味しい','맛있다','oishii'],['綺麗','예쁘다','kirei'],['仕事','일','shigoto'],['うち','집','uchi'],['お金','돈','okane'],['天気','날씨','tenki'],['すみません','죄송합니다','sumimasen'],['猫','고양이','neko'],['犬','개','inu']]};
+const LG={'영어 초급':'en-US','영어 중급':'en-US','중국어 초급':'zh-CN','일본어 초급':'ja-JP'};
+const ALL=Object.entries(W).flatMap(([k,a])=>a.map(w=>[w[0],w[1],w[2]||'',LG[k]]));
+const field=document.getElementById('field'),ov=document.getElementById('ov'),cEl=document.getElementById('c'),hudEl=document.getElementById('hud');
+let st=null,pool=[],note=load(),rank=loadR();
+function loadR(){try{return JSON.parse(localStorage.getItem('rk')||'[]')}catch(e){return[]}}
+function saveR(){try{localStorage.setItem('rk',JSON.stringify(rank))}catch(e){}}
+function lastName(){try{return localStorage.getItem('rn')||''}catch(e){return''}}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function rankHtml(hl){return rank.length?'<p>랭킹 TOP 4</p><ul>'+rank.map((r,i)=>'<li'+(i===hl?' class="me"':'')+'><b>'+(i+1)+'위</b>'+esc(r.n)+' · '+r.s+'점 <small>'+esc(r.l)+'</small></li>').join('')+'</ul>':''}
+function load(){try{return JSON.parse(localStorage.getItem('wn')||'{}')}catch(e){return{}}}
+function save(){try{localStorage.setItem('wn',JSON.stringify(note))}catch(e){}}
+function shuffle(a){return a.sort(()=>Math.random()-.5)}
+function speak(t,l){try{const u=new SpeechSynthesisUtterance(t);u.lang=l||'en-US';speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){}}
+function hud(){hudEl.children[0].textContent='점수 '+st.score+(st.combo>1?'  ×'+st.combo+' 콤보':'');hudEl.children[1].textContent='♥'.repeat(Math.max(0,st.lives))}
+function menu(msg,hl){
+  const n=Object.keys(note).length;
+  let b=Object.keys(W).map(k=>'<button data-l="'+k+'">'+k+' 시작</button>').join('');
+  if(n>=4)b+='<button data-l="오답">오답 노트 복습 ('+n+'개)</button>';
+  ov.innerHTML='<div class="card"><h2>단어 떨어뜨리기</h2>'+(msg||'<p>가장 아래 단어의 뜻을 고르세요.<br>바닥에 닿으면 목숨이 줄어요. (숫자키 1~4도 가능)</p>')+rankHtml(hl)+'<div class="btns">'+b+'</div></div>';
+  ov.hidden=false;
+  ov.querySelectorAll('[data-l]').forEach(x=>x.onclick=()=>start(x.dataset.l));
+}
+function start(l){
+  pool=l==='오답'?Object.entries(note):W[l];
+  field.querySelectorAll('.w').forEach(e=>e.remove());
+  st={l,items:[],lives:3,score:0,combo:0,spawn:9,target:null,miss:{},last:performance.now(),over:false};
+  ov.hidden=true;cEl.innerHTML='';hud();
+  requestAnimationFrame(loop);
+}
+function spawn(){
+  const used=st.items.map(i=>i.en),c=pool.filter(w=>!used.includes(w[0]));
+  if(!c.length)return;
+  const w=c[Math.random()*c.length|0],el=document.createElement('div'),f=ALL.find(a=>a[0]===w[0])||[w[0],w[1],'','en-US'];
+  el.className='w';el.textContent=w[0];
+  if(f[2]){const s=document.createElement('small');s.textContent=f[2];el.appendChild(s)}
+  field.appendChild(el);
+  const x=Math.random()*Math.max(0,field.clientWidth-el.offsetWidth-8)+4;
+  st.items.push({en:w[0],ko:w[1],lang:f[3],el,x,y:-el.offsetHeight});
+}
+function drop(i){i.el.remove();st.items=st.items.filter(o=>o!==i);if(st.target===i)st.target=null}
+function miss(i){
+  st.miss[i.en]=i.ko;note[i.en]=i.ko;save();
+  drop(i);st.lives--;st.combo=0;hud();shake();
+  if(st.lives<=0)end();
+}
+function shake(){field.classList.remove('x');void field.offsetWidth;field.classList.add('x')}
+function loop(t){
+  if(!st||st.over)return;
+  const dt=Math.min(.05,(t-st.last)/1000);st.last=t;st.spawn+=dt;
+  if(st.spawn>Math.max(1.3,2.8-st.score/250)&&st.items.length<5){st.spawn=0;spawn()}
+  const sp=Math.min(150,38+st.score/8),H=field.clientHeight;
+  for(const i of [...st.items]){
+    if(st.over)return;
+    i.y+=sp*dt;i.el.style.transform='translate('+i.x+'px,'+i.y+'px)';
+    if(i.y+i.el.offsetHeight>=H)miss(i);
+  }
+  if(st.over)return;
+  const low=st.items.reduce((a,b)=>!a||b.y>a.y?b:a,null);
+  if(low!==st.target){st.target=low;render()}
+  requestAnimationFrame(loop);
+}
+function render(){
+  const t=st.target;
+  st.items.forEach(i=>i.el.classList.toggle('t',i===t));
+  if(!t){cEl.innerHTML='';return}
+  const d=shuffle([...new Set(ALL.filter(w=>w[3]===t.lang&&w[1]!==t.ko).map(w=>w[1]))]).slice(0,3);
+  const o=shuffle([t.ko,...d]);
+  cEl.innerHTML=o.map((k,i)=>'<button>'+(i+1)+'. '+k+'</button>').join('');
+  [...cEl.children].forEach((b,i)=>b.onclick=()=>answer(o[i]));
+}
+function answer(k){
+  if(!st||st.over||!st.target)return;
+  const t=st.target;
+  if(k===t.ko){
+    st.combo++;st.score+=10+Math.min(st.combo,10)*2;
+    if(st.l==='오답'){delete note[t.en];save()}
+    speak(t.en,t.lang);drop(t);hud();
+  }else{
+    st.combo=0;note[t.en]=t.ko;st.miss[t.en]=t.ko;save();hud();shake();
+  }
+}
+function over(res,hl){
+  ov.innerHTML='<div class="card"><h2>게임 종료</h2><p>점수 <b>'+st.score+'</b></p><div class="btns"><button id="rs">재시작</button></div>'+rankHtml(hl)+res+'</div>';
+  ov.hidden=false;
+  document.getElementById('rs').onclick=()=>menu();
+}
+function end(){
+  st.over=true;
+  field.querySelectorAll('.w').forEach(e=>e.remove());cEl.innerHTML='';
+  const m=Object.entries(st.miss);
+  const res=(m.length?'<p>틀린 단어</p><ul>'+m.slice(0,5).map(w=>'<li><b>'+w[0]+'</b>'+w[1]+'</li>').join('')+'</ul>':'<p>틀린 단어가 없어요.</p>');
+  const s=st.score;
+  if(s>0&&st.l!=='오답'&&(rank.length<4||s>rank[rank.length-1].s)){
+    ov.innerHTML='<div class="card"><h2>랭킹 진입!</h2><p>'+s+'점 · 이름을 입력하세요</p><input id="nm" maxlength="8" placeholder="이름" value="'+esc(lastName())+'"><div class="btns"><button id="ok">등록</button></div></div>';
+    ov.hidden=false;
+    const go=()=>{const n=(document.getElementById('nm').value.trim()||'익명').slice(0,8);try{localStorage.setItem('rn',n)}catch(e){}
+      const e={n,s,l:st.l};rank.push(e);rank.sort((a,b)=>b.s-a.s);rank=rank.slice(0,4);saveR();over(res,rank.indexOf(e))};
+    document.getElementById('ok').onclick=go;
+    document.getElementById('nm').onkeydown=ev=>{if(ev.key==='Enter')go()};
+  }else over(res,-1);
+}
+document.addEventListener('keydown',e=>{const n=+e.key;if(n>=1&&n<=4&&cEl.children[n-1])cEl.children[n-1].click()});
+menu();
+</script>
+</body>
+</html>
